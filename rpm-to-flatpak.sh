@@ -3,63 +3,60 @@
 # Log file name
 log_file="flatpak_rpm_changes.log"
 
-# Variables to track installed Flatpaks and removed RPMs
+# Variables to track Flatpak installations and RPM removals
 installed_flatpaks=()
 removed_rpms=()
 
-# Clear the previous log file (if it exists)
+# Clear the previous log file (if exists)
 > "$log_file"
 
 # List RPM packages
 rpm_apps=$(rpm -qa --qf '%{NAME}\n')
 
-# List system packages that cannot be found as Flatpak
-excluded_apps=("kernel" "kernel-modules" "kernel-modules-extra" "xorg" "qemu" "netstandard" "alsa" "gnome-autoar" "ghc")
+# List system packages that won't be touched or available as Flatpaks
+excluded_apps=("kernel" "kernel-core" "kernel-modules" "kernel-modules-extra" "xorg" "qemu" "netstandard" "alsa" "gnome-autoar" "ghc" "glibc" "dbus" "systemd" "gdm")
 
 for app in $rpm_apps; do
-    # Skip if the application is in the excluded_apps list
+    # Skip if the app is in the excluded_apps list (system packages)
     if [[ " ${excluded_apps[@]} " =~ " ${app} " ]]; then
         echo "$app is a system package, skipping."
         continue
     fi
 
-    echo "Found RPM installed application: $app"
+    echo "Found application installed via RPM: $app"
     
-    # Check if the application is available in the Fedora Flatpaks repository
-    fedora_flatpak=$(flatpak search "$app" | grep -m 1 "$app")
+    # Check if the application is available in any Flatpak repository
+    flatpak_search=$(flatpak search --app "$app")
+    fedora_flatpak=$(echo "$flatpak_search" | grep "fedora" | grep -m 1 "$app")
+    flathub_flatpak=$(echo "$flatpak_search" | grep "flathub" | grep -m 1 "$app")
     
     if [ ! -z "$fedora_flatpak" ]; then
         # Install from Fedora Flatpaks (if not already installed)
         if ! flatpak list --app | grep -q "$app"; then
-            echo "Installing $app from the Fedora Flatpaks repository..."
+            echo "Installing $app from Fedora Flatpaks repository..."
             flatpak install -y fedora "$app"
             installed_flatpaks+=("$app")  # Save installed Flatpaks
         else
             echo "$app is already installed from Fedora Flatpaks."
         fi
-    else
-        # Search in Flathub if not found in Fedora Flatpaks
-        flathub_flatpak=$(flatpak search "$app" | grep -m 1 "$app")
-        
-        if [ ! -z "$flathub_flatpak" ]; then
-            # Install from Flathub (if not already installed)
-            if ! flatpak list --app | grep -q "$app"; then
-                echo "Installing $app from the Flathub repository..."
-                flatpak install -y flathub "$app"
-                installed_flatpaks+=("$app")  # Save installed Flatpaks
-            else
-                echo "$app is already installed from Flathub."
-            fi
+    elif [ ! -z "$flathub_flatpak" ]; then
+        # Install from Flathub (if not already installed)
+        if ! flatpak list --app | grep -q "$app"; then
+            echo "Installing $app from Flathub repository..."
+            flatpak install -y flathub "$app"
+            installed_flatpaks+=("$app")  # Save installed Flatpaks
         else
-            echo "$app was not found in either Fedora Flatpaks or Flathub."
+            echo "$app is already installed from Flathub."
         fi
+    else
+        echo "$app not found in either Fedora Flatpaks or Flathub."
     fi
     
     echo "$app has been processed."
     
-    # Ask if the RPM version should be removed
+    # Ask if you want to remove the RPM version
     if [[ $(flatpak list --app | grep "$app") ]]; then
-        read -p "Do you want to remove the RPM version for $app? (y/n): " choice
+        read -p "Do you want to remove the RPM version of $app? (y/n): " choice
         if [[ "$choice" == "y" ]]; then
             echo "Removing RPM version of $app..."
             sudo dnf remove -y "$app"
@@ -70,7 +67,7 @@ for app in $rpm_apps; do
     fi
 done
 
-# All processes are complete, write to log file
+# Write to the log file after all operations
 echo "Installed Flatpak applications:" >> "$log_file"
 for flatpak in "${installed_flatpaks[@]}"; do
     echo "$flatpak" >> "$log_file"
@@ -84,4 +81,4 @@ for rpm in "${removed_rpms[@]}"; do
 done
 
 echo "Log file saved as $log_file."
-echo "All RPM applications have been checked and necessary Flatpaks have been installed."
+echo "All RPM applications were checked, and necessary Flatpaks were installed."
