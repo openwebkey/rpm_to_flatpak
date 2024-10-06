@@ -25,8 +25,10 @@ for app in $rpm_apps; do
 
     echo "RPM ile yüklü uygulama bulundu: $app"
     
-    # Fedora Flatpaks deposunda uygulamanın olup olmadığını kontrol et
-    fedora_flatpak=$(flatpak search "$app" | grep -m 1 "$app")
+    # Tüm Flatpak depolarında uygulamanın olup olmadığını kontrol et
+    flatpak_search=$(flatpak search --app "$app")
+    fedora_flatpak=$(echo "$flatpak_search" | grep "fedora" | grep -m 1 "$app")
+    flathub_flatpak=$(echo "$flatpak_search" | grep "flathub" | grep -m 1 "$app")
     
     if [ ! -z "$fedora_flatpak" ]; then
         # Fedora Flatpaks'dan kur (eğer daha önce yüklenmediyse)
@@ -37,22 +39,17 @@ for app in $rpm_apps; do
         else
             echo "$app zaten Fedora Flatpaks'dan yüklü."
         fi
-    else
-        # Fedora Flatpaks'ta bulunamazsa Flathub'dan arama
-        flathub_flatpak=$(flatpak search "$app" | grep -m 1 "$app")
-        
-        if [ ! -z "$flathub_flatpak" ]; then
-            # Flathub'dan kur (eğer daha önce yüklenmediyse)
-            if ! flatpak list --app | grep -q "$app"; then
-                echo "Flathub deposundan $app kuruluyor..."
-                flatpak install -y flathub "$app"
-                installed_flatpaks+=("$app")  # Kurulan Flatpak'leri kaydet
-            else
-                echo "$app zaten Flathub'dan yüklü."
-            fi
+    elif [ ! -z "$flathub_flatpak" ]; then
+        # Flathub'dan kur (eğer daha önce yüklenmediyse)
+        if ! flatpak list --app | grep -q "$app"; then
+            echo "Flathub deposundan $app kuruluyor..."
+            flatpak install -y flathub "$app"
+            installed_flatpaks+=("$app")  # Kurulan Flatpak'leri kaydet
         else
-            echo "$app ne Fedora Flatpaks ne de Flathub'da bulunamadı."
+            echo "$app zaten Flathub'dan yüklü."
         fi
+    else
+        echo "$app ne Fedora Flatpaks ne de Flathub'da bulunamadı."
     fi
     
     echo "$app işleme alındı."
